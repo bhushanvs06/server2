@@ -13,9 +13,8 @@ const server = http.createServer(app);
 // In production → change to your actual frontend domain
 const io = new Server(server, {
   cors: {
-    origin: ["http://debattlex.s3-website.ap-south-1.amazonaws.com","http://localhost:3000", "http://127.0.0.1:3000"],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: "*",
+    methods: ["GET", "POST"]
   },
   pingTimeout: 60000,
   pingInterval: 25000
@@ -133,4 +132,5 @@ const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`Socket.IO server running on port ${PORT}`);
   console.log(`Frontend should connect to: http://localhost:${PORT}`);
+
 });
