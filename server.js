@@ -13,7 +13,7 @@ const server = http.createServer(app);
 // In production → change to your actual frontend domain
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "https://main.d1qvyg0l26z205.amplifyapp.com",
     methods: ["GET", "POST"]
   },
   pingTimeout: 60000,
@@ -132,4 +132,5 @@ const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`Socket.IO server running on port ${PORT}`);
   console.log(`Frontend should connect to: http://localhost:${PORT}`);
+
 });
