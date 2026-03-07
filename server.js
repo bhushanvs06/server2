@@ -1,5 +1,6 @@
 // server.js  (or index.js)
-// Recommended structure for 2025-era small project
+// Updated for troubleshooting: /health now returns plain text "working"
+// This makes direct testing[](http://YOUR-EC2-DNS:5001/health) super obvious
 
 const express = require('express');
 const http = require('http');
@@ -26,29 +27,22 @@ const io = new Server(server, {
 const waitingUsers = new Map();       // socket.id → socket
 const activePairs = new Map();        // socket.id → peerSocket.id
 
-// Optional: you can later store userId/email instead of socket.id
-// const waitingUsers = new Map();    // userId → socket
-
 // ────────────────────────────────────────────────
 //   Matching logic
 // ────────────────────────────────────────────────
 function tryMatchWaitingUser(newSocket) {
   if (waitingUsers.size === 0) {
-    // First person → just wait
     waitingUsers.set(newSocket.id, newSocket);
     newSocket.emit('waiting');
     return;
   }
 
-  // Take the oldest waiting user
   const [peerId, peerSocket] = waitingUsers.entries().next().value;
   waitingUsers.delete(peerId);
 
-  // Pair them
   activePairs.set(newSocket.id, peerId);
   activePairs.set(peerId, newSocket.id);
 
-  // Notify both
   newSocket.emit('peer-matched', { peerId, role: 'caller' });
   peerSocket.emit('peer-matched', { peerId: newSocket.id, role: 'callee' });
 
@@ -61,12 +55,10 @@ function tryMatchWaitingUser(newSocket) {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // ─── User wants to join random hangout ───
   socket.on('join-queue', () => {
     tryMatchWaitingUser(socket);
   });
 
-  // ─── WebRTC signaling ───
   socket.on('offer', ({ to, offer }) => {
     const target = io.sockets.sockets.get(to);
     if (target) target.emit('offer', { from: socket.id, offer });
@@ -82,43 +74,41 @@ io.on('connection', (socket) => {
     if (target) target.emit('ice-candidate', { candidate });
   });
 
-  // ─── Hang up / disconnect cleanly ───
   socket.on('hangup', ({ to }) => {
     const peerId = activePairs.get(socket.id);
     if (peerId && peerId === to) {
       const peerSocket = io.sockets.sockets.get(peerId);
-      if (peerSocket) {
-        peerSocket.emit('hangup');
-      }
+      if (peerSocket) peerSocket.emit('hangup');
       activePairs.delete(socket.id);
       activePairs.delete(peerId);
     }
   });
 
-  // ─── When user disconnects ───
   socket.on('disconnect', (reason) => {
     console.log(`User disconnected: ${socket.id} (${reason})`);
 
-    // Was waiting → remove from queue
     if (waitingUsers.has(socket.id)) {
       waitingUsers.delete(socket.id);
     }
 
-    // Was in call → notify peer
     const peerId = activePairs.get(socket.id);
     if (peerId) {
       const peerSocket = io.sockets.sockets.get(peerId);
-      if (peerSocket) {
-        peerSocket.emit('hangup');
-      }
+      if (peerSocket) peerSocket.emit('hangup');
       activePairs.delete(socket.id);
       activePairs.delete(peerId);
     }
   });
 });
 
-// Optional: health check endpoint
+// UPDATED HEALTH ENDPOINT — now returns plain text "working"
+// This is exactly what you asked for → when you open the URL it will say "working"
 app.get('/health', (req, res) => {
+  res.send('working');   // ← This is the only change
+});
+
+// (Optional) You can still get full stats at /health-json if you want
+app.get('/health-json', (req, res) => {
   res.json({
     status: 'ok',
     waiting: waitingUsers.size,
@@ -130,6 +120,7 @@ app.get('/health', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
-  console.log(`Socket.IO server running on port ${PORT}`);
-  console.log(`Frontend should connect to: http://localhost:${PORT}`);
+  console.log(`✅ Socket.IO server running on port ${PORT}`);
+  console.log(`✅ Test it now: http://localhost:${PORT}/health`);
+  console.log(`✅ In production it should return: "working"`);
 });
